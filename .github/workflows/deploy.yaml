@@ -47,7 +47,7 @@ jobs:
       - name: Setup Tailscale
         uses: tailscale/github-action@v2
         with:
-					# TODO: Move to OIDC once out of beta
+          # TODO: Move to OIDC once out of beta
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:ci
