@@ -64,13 +64,15 @@ jobs:
           chmod 600 ~/.kube/config
 
       - name: Deploy to Kubernetes
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           # Create namespace if it doesn't exist
           kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
 
           # Deploy with Kustomize
           cd k8s/overlays/production
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:${{ github.sha }}
+          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:${GITHUB_SHA::7}
           kubectl apply -k .
 
           # Wait for rollout
