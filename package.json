@@ -1,0 +1,23 @@
+{
+	"name": "k8s-hello",
+	"version": "1.0.0",
+	"main": "index.js",
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"dev": "tsx watch src/index.ts"
+	},
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@types/express": "^5.0.6",
+		"@types/node": "^24.10.1",
+		"prettier": "^3.7.4",
+		"typescript": "^5.9.3"
+	},
+	"dependencies": {
+		"express": "^5.2.1"
+	}
+}
