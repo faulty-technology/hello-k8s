@@ -1,0 +1,49 @@
+name: Cleanup Preview Environment
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.28.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Delete Preview Namespace
+        run: |
+          NAMESPACE="pr-${{ github.event.pull_request.number }}"
+
+          if kubectl get namespace ${NAMESPACE} &> /dev/null; then
+            echo "Deleting namespace ${NAMESPACE}..."
+            kubectl delete namespace ${NAMESPACE} --wait=false
+            echo "Namespace ${NAMESPACE} deletion initiated"
+          else
+            echo "Namespace ${NAMESPACE} not found, already cleaned up"
+          fi
+
+      - name: Delete Container Image
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-pre-release-versions: true
+        continue-on-error: true
