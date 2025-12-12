@@ -109,20 +109,16 @@ runs:
             pr-number: "${PR_NUMBER}"
         EOF
 
-        # Patch ingress hostname
+        # Patch only the ingress hostname using JSON patch (preserves all other config)
         cat > ingress-patch.yaml <<EOF
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: ${APP_NAME}
-        spec:
-          rules:
-            - host: ${PREVIEW_URL}
+        - op: replace
+          path: /spec/rules/0/host
+          value: ${PREVIEW_URL}
         EOF
 
-        # Add ingress patch if not already present
+        # Add JSON patch targeting the ingress (if not already present)
         if ! grep -q "ingress-patch.yaml" kustomization.yaml; then
-          kustomize edit add patch --path ingress-patch.yaml
+          kustomize edit add patch --path ingress-patch.yaml --kind Ingress --name ${APP_NAME}
         fi
 
     - name: Set image tag
