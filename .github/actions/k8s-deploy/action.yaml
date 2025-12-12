@@ -98,13 +98,14 @@ runs:
         # Set namespace dynamically (affects all resources)
         kustomize edit set namespace ${NAMESPACE}
 
-        # Patch namespace resource name and add pr-number label
-        cat > namespace-patch.yaml <<EOF
+        # Generate namespace resource with dynamic name and labels
+        cat > namespace.yaml <<EOF
         apiVersion: v1
         kind: Namespace
         metadata:
           name: ${NAMESPACE}
           labels:
+            environment: preview
             pr-number: "${PR_NUMBER}"
         EOF
 
@@ -119,10 +120,7 @@ runs:
             - host: ${PREVIEW_URL}
         EOF
 
-        # Add patches if not already present
-        if ! grep -q "namespace-patch.yaml" kustomization.yaml; then
-          kustomize edit add patch --path namespace-patch.yaml
-        fi
+        # Add ingress patch if not already present
         if ! grep -q "ingress-patch.yaml" kustomization.yaml; then
           kustomize edit add patch --path ingress-patch.yaml
         fi
@@ -146,7 +144,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.kustomize-path }}
       run: |
-        rm -f namespace-patch.yaml ingress-patch.yaml
+        rm -f ingress-patch.yaml
 
     - name: Wait for rollout
       shell: bash
