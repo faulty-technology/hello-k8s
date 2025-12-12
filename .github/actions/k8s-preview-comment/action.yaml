@@ -23,5 +23,5 @@ runs:
         IMAGE: ${{ inputs.image }}
       with:
         script: |
-          const script = require('./.github/actions/k8s-preview-comment/comment.js')
+          const script = require('./.github/actions/k8s-preview-comment/comment.cjs')
           await script({ github, context, core })
