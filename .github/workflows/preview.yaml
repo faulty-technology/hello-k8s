@@ -20,6 +20,55 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Configure preview environment
+        working-directory: k8s/overlays/preview
+        env:
+          APP_NAME: hello-k8s
+          NAMESPACE: hello-k8s-pr-${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_HOST: hello-k8s-pr-${{ github.event.pull_request.number }}-preview.faulty.technology
+        run: |
+          set -euo pipefail
+
+          # Set namespace for all resources
+          kustomize edit set namespace ${NAMESPACE}
+
+          # Generate namespace resource
+          cat > namespace.yaml <<EOF
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: ${NAMESPACE}
+            labels:
+              environment: preview
+              pr-number: "${PR_NUMBER}"
+          EOF
+
+          # Generate ingress patch with preview hostname
+          cat > ingress-patch.yaml <<EOF
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: ${APP_NAME}
+          spec:
+            rules:
+              - host: ${PREVIEW_HOST}
+          EOF
+
+          # Add ingress patch to kustomization
+          if ! grep -q "ingress-patch.yaml" kustomization.yaml; then
+            kustomize edit add patch --path ingress-patch.yaml
+          fi
+
+          echo "Preview environment configured for namespace: ${NAMESPACE}"
+
+      - name: Validate k8s manifests
+        working-directory: k8s/overlays/preview
+        run: |
+          set -euo pipefail
+          kustomize build . > /dev/null
+          echo "✓ Manifests validated successfully"
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
