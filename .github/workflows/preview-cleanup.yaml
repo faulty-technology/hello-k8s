@@ -7,43 +7,58 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
 
     steps:
-      - name: Setup Tailscale
-        uses: tailscale/github-action@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup K8s access
+        uses: ./.github/actions/k8s-setup
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
-          tags: tag:ci
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          kubeconfig: ${{ secrets.KUBECONFIG }}
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Cleanup preview environment
+        uses: ./.github/actions/k8s-preview-cleanup
         with:
-          version: "v1.28.0"
+          app-name: hello-k8s
+          pr-number: ${{ github.event.pull_request.number }}
 
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-
-      - name: Delete Preview Namespace
-        run: |
-          NAMESPACE="pr-${{ github.event.pull_request.number }}"
-
-          if kubectl get namespace ${NAMESPACE} &> /dev/null; then
-            echo "Deleting namespace ${NAMESPACE}..."
-            kubectl delete namespace ${NAMESPACE} --wait=false
-            echo "Namespace ${NAMESPACE} deletion initiated"
-          else
-            echo "Namespace ${NAMESPACE} not found, already cleaned up"
-          fi
-
-      - name: Delete Container Image
-        uses: actions/delete-package-versions@v4
+      - name: Delete PR container image
+        uses: actions/github-script@v7
         with:
-          package-name: ${{ github.event.repository.name }}
-          package-type: container
-          min-versions-to-keep: 10
-          delete-only-pre-release-versions: true
-        continue-on-error: true
+          script: |
+            const prTag = `pr-${{ github.event.pull_request.number }}`;
+            const packageName = context.repo.repo;
+
+            try {
+              // List all versions of the package
+              const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                package_type: 'container',
+                package_name: packageName,
+                username: context.repo.owner,
+              });
+
+              // Find the version with the PR tag
+              const prVersion = versions.data.find(v =>
+                v.metadata?.container?.tags?.includes(prTag)
+              );
+
+              if (prVersion) {
+                await github.rest.packages.deletePackageVersionForUser({
+                  package_type: 'container',
+                  package_name: packageName,
+                  username: context.repo.owner,
+                  package_version_id: prVersion.id,
+                });
+                console.log(`Deleted container image with tag: ${prTag}`);
+              } else {
+                console.log(`No container image found with tag: ${prTag}`);
+              }
+            } catch (error) {
+              // Log but don't fail the workflow
+              console.log(`Failed to delete container image: ${error.message}`);
+            }

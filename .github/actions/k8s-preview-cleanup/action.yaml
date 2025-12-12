@@ -1,0 +1,26 @@
+name: "K8s Preview Cleanup"
+description: "Cleans up a preview environment namespace"
+
+inputs:
+  app-name:
+    description: "Application name"
+    required: true
+  pr-number:
+    description: "Pull request number"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Delete Preview Namespace
+      shell: bash
+      run: |
+        NAMESPACE="${{ inputs.app-name }}-pr-${{ inputs.pr-number }}"
+
+        if kubectl get namespace ${NAMESPACE} &> /dev/null; then
+          echo "Deleting namespace ${NAMESPACE}..."
+          kubectl delete namespace ${NAMESPACE} --wait=false
+          echo "Namespace ${NAMESPACE} deletion initiated"
+        else
+          echo "Namespace ${NAMESPACE} not found, already cleaned up"
+        fi

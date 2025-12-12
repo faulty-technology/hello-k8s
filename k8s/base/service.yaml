@@ -1,10 +1,15 @@
+# =============================================================================
+# APP-SPECIFIC VALUES - Change these for each new app:
+#   - metadata.name, selector.app → your-app-name
+#   - targetPort → your app's port
+# =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
-  name: hello-k8s
+  name: hello-k8s  # APP-SPECIFIC: your-app-name
+  # labels.app injected by kustomize commonLabels
 spec:
-  selector:
-    app: hello-k8s
+  # selector.app injected by kustomize commonLabels
   ports:
     - port: 80
-      targetPort: 3000
+      targetPort: 3000  # APP-SPECIFIC: your app's port

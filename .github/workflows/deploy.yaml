@@ -46,36 +46,21 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Setup Tailscale
-        uses: tailscale/github-action@v2
+      - name: Setup K8s access
+        uses: ./.github/actions/k8s-setup
         with:
-          # TODO: Move to OIDC once out of beta
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
-          tags: tag:ci
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          kubeconfig: ${{ secrets.KUBECONFIG }}
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: "v1.28.0"
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+      - name: Get short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Deploy to Kubernetes
-        env:
-          GITHUB_SHA: ${{ github.sha }}
-        run: |
-          # Create namespace if it doesn't exist
-          kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
-
-          # Deploy with Kustomize
-          cd k8s/overlays/production
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:${GITHUB_SHA::7}
-          kubectl apply -k .
-
-          # Wait for rollout
-          kubectl rollout status deployment/hello-k8s -n production --timeout=120s
+        uses: ./.github/actions/k8s-deploy
+        with:
+          app-name: hello-k8s
+          kustomize-path: k8s/overlays/production
+          image-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          image-tag: ${{ steps.sha.outputs.short }}

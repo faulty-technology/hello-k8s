@@ -1,0 +1,27 @@
+name: "K8s Preview Comment"
+description: "Comments on a PR with preview environment details"
+
+inputs:
+  preview-url:
+    description: "The preview environment URL"
+    required: true
+  namespace:
+    description: "The Kubernetes namespace"
+    required: true
+  image:
+    description: "The Docker image deployed"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Comment on PR
+      uses: actions/github-script@v7
+      env:
+        PREVIEW_URL: ${{ inputs.preview-url }}
+        NAMESPACE: ${{ inputs.namespace }}
+        IMAGE: ${{ inputs.image }}
+      with:
+        script: |
+          const script = require('./.github/actions/k8s-preview-comment/comment.js')
+          await script({ github, context, core })

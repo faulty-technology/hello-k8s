@@ -1,0 +1,39 @@
+name: "K8s Setup"
+description: "Sets up Tailscale, kubectl, and kubeconfig for K8s cluster access"
+
+inputs:
+  tailscale-oauth-client-id:
+    description: "Tailscale OAuth client ID"
+    required: true
+  tailscale-oauth-secret:
+    description: "Tailscale OAuth client secret"
+    required: true
+  kubeconfig:
+    description: "Base64 encoded kubeconfig file"
+    required: true
+  kubectl-version:
+    description: "kubectl version to install"
+    required: false
+    default: "v1.28.0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Tailscale
+      uses: tailscale/github-action@v2
+      with:
+        oauth-client-id: ${{ inputs.tailscale-oauth-client-id }}
+        oauth-secret: ${{ inputs.tailscale-oauth-secret }}
+        tags: tag:ci
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ inputs.kubectl-version }}
+
+    - name: Configure kubeconfig
+      shell: bash
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ inputs.kubeconfig }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config

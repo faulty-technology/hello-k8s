@@ -1,4 +1,5 @@
-# APP-SPECIFIC: Change name and host to your app's values
+# APP-SPECIFIC: Change name to your app name
+# Host is patched dynamically by k8s-deploy action to pr-{number}-preview.domain
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,7 +8,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
-    - host: hello.faulty.technology  # APP-SPECIFIC: your-app.yourdomain.com
+    - host: preview.faulty.technology  # Overridden by CI to pr-{N}-preview.domain
       http:
         paths:
           - path: /
