@@ -51,7 +51,8 @@ jobs:
         with:
           tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
-          kubeconfig: ${{ secrets.KUBECONFIG }}
+          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
+          k3s-token: ${{ secrets.K3S_TOKEN }}
 
       - name: Get short SHA
         id: sha
