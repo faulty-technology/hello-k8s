@@ -17,7 +17,7 @@ replicas:
   - name: hello-k8s
     count: 1
 
-# Lower resource limits for previews
+# Lower resource limits for previews + always pull image (same tag, new content)
 patches:
   - patch: |-
       - op: replace
@@ -31,6 +31,9 @@ patches:
         value:
           name: NODE_ENV
           value: preview
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
     target:
       kind: Deployment
       name: hello-k8s  # APP-SPECIFIC: your-app-name

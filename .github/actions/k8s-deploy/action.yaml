@@ -98,33 +98,27 @@ runs:
         # Set namespace dynamically (affects all resources)
         kustomize edit set namespace ${NAMESPACE}
 
-        # Patch namespace resource name and add pr-number label
-        cat > namespace-patch.yaml <<EOF
+        # Generate namespace resource with dynamic name and labels
+        cat > namespace.yaml <<EOF
         apiVersion: v1
         kind: Namespace
         metadata:
           name: ${NAMESPACE}
           labels:
+            environment: preview
             pr-number: "${PR_NUMBER}"
         EOF
 
-        # Patch ingress hostname
+        # Patch only the ingress hostname using JSON patch (preserves all other config)
         cat > ingress-patch.yaml <<EOF
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: ${APP_NAME}
-        spec:
-          rules:
-            - host: ${PREVIEW_URL}
+        - op: replace
+          path: /spec/rules/0/host
+          value: ${PREVIEW_URL}
         EOF
 
-        # Add patches if not already present
-        if ! grep -q "namespace-patch.yaml" kustomization.yaml; then
-          kustomize edit add patch --path namespace-patch.yaml
-        fi
+        # Add JSON patch targeting the ingress (if not already present)
         if ! grep -q "ingress-patch.yaml" kustomization.yaml; then
-          kustomize edit add patch --path ingress-patch.yaml
+          kustomize edit add patch --path ingress-patch.yaml --kind Ingress --name ${APP_NAME}
         fi
 
     - name: Set image tag
@@ -141,12 +135,20 @@ runs:
         set -euo pipefail
         kubectl apply -k .
 
+    - name: Force rollout for preview (same tag, new image)
+      if: inputs.preview == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        kubectl rollout restart deployment/${{ inputs.app-name }} \
+          -n ${{ steps.namespace.outputs.namespace }}
+
     - name: Cleanup preview patch files
       if: inputs.preview == 'true'
       shell: bash
       working-directory: ${{ inputs.kustomize-path }}
       run: |
-        rm -f namespace-patch.yaml ingress-patch.yaml
+        rm -f ingress-patch.yaml
 
     - name: Wait for rollout
       shell: bash
