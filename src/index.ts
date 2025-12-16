@@ -11,7 +11,7 @@ app.get("/health", (_req: Request, res: Response) => {
 // Main endpoint
 app.get("/", (_req: Request, res: Response) => {
 	res.json({
-		message: "Hello from Kubernetes, preview test two!",
+		message: "Hello from Kubernetes, preview test three!",
 		environment: process.env.NODE_ENV ?? "development",
 		hostname: process.env.HOSTNAME ?? "unknown",
 		version: process.env.APP_VERSION ?? "0.0.0",
