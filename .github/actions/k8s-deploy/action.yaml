@@ -135,6 +135,14 @@ runs:
         set -euo pipefail
         kubectl apply -k .
 
+    - name: Force rollout for preview (same tag, new image)
+      if: inputs.preview == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        kubectl rollout restart deployment/${{ inputs.app-name }} \
+          -n ${{ steps.namespace.outputs.namespace }}
+
     - name: Cleanup preview patch files
       if: inputs.preview == 'true'
       shell: bash
