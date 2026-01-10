@@ -57,3 +57,20 @@ resourceQuota:
 commonLabels: {}
   # environment: production
   # team: platform
+
+# =============================================================================
+# Container Defaults
+# =============================================================================
+# Default settings applied to all containers unless overridden per-container.
+# Environment-specific values files (values-preview.yaml, values-production.yaml)
+# can override these defaults.
+# =============================================================================
+containerDefaults:
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

@@ -23,14 +23,15 @@ spec:
           {{- else }}
           image: "{{ .image }}:{{ .tag }}"
           {{- end }}
-          imagePullPolicy: {{ .imagePullPolicy | default "IfNotPresent" }}
+          imagePullPolicy: {{ .imagePullPolicy | default $.Values.containerDefaults.imagePullPolicy | default "IfNotPresent" }}
           {{- if .port }}
           ports:
             - name: http
               containerPort: {{ .port }}
               protocol: TCP
           {{- end }}
-          {{- with .resources }}
+          {{- $resources := .resources | default $.Values.containerDefaults.resources }}
+          {{- with $resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}

@@ -56,21 +56,13 @@ jobs:
             echo "namespace=${{ env.APP_NAME }}-pr-${PR_NUM}" >> $GITHUB_OUTPUT
             echo "host=${{ env.APP_NAME }}-pr-${PR_NUM}-preview.faulty.technology" >> $GITHUB_OUTPUT
             echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
-            echo "replicas=1" >> $GITHUB_OUTPUT
-            echo "cpu_limit=250m" >> $GITHUB_OUTPUT
-            echo "memory_limit=256Mi" >> $GITHUB_OUTPUT
-            echo "resource_quota=true" >> $GITHUB_OUTPUT
-            echo "image_pull_policy=Always" >> $GITHUB_OUTPUT
+            echo "values_file=helm/values-preview.yaml" >> $GITHUB_OUTPUT
           else
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "namespace=${{ env.APP_NAME }}-prod" >> $GITHUB_OUTPUT
             echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
             echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
-            echo "replicas=2" >> $GITHUB_OUTPUT
-            echo "cpu_limit=500m" >> $GITHUB_OUTPUT
-            echo "memory_limit=512Mi" >> $GITHUB_OUTPUT
-            echo "resource_quota=false" >> $GITHUB_OUTPUT
-            echo "image_pull_policy=IfNotPresent" >> $GITHUB_OUTPUT
+            echo "values_file=helm/values-production.yaml" >> $GITHUB_OUTPUT
           fi
 
       # ─────────────────────────────────────────────────────────────────────
@@ -127,8 +119,6 @@ jobs:
           namespace: ${{ steps.env.outputs.namespace }}
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           status: deploying
-          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
-          memory-limit: ${{ steps.env.outputs.memory_limit }}
 
       # ─────────────────────────────────────────────────────────────────────
       # Deploy with Helm
@@ -139,17 +129,24 @@ jobs:
             --namespace ${{ steps.env.outputs.namespace }} \
             --create-namespace \
             -f helm/values-hello-k8s.yaml \
-            --set replicas=${{ steps.env.outputs.replicas }} \
+            -f ${{ steps.env.outputs.values_file }} \
             --set ingress.host=${{ steps.env.outputs.host }} \
             --set containers[0].tag=${{ steps.env.outputs.tag }} \
             --set containers[0].digest=${{ steps.build.outputs.digest }} \
-            --set containers[0].resources.limits.cpu=${{ steps.env.outputs.cpu_limit }} \
-            --set containers[0].resources.limits.memory=${{ steps.env.outputs.memory_limit }} \
-            --set containers[0].imagePullPolicy=${{ steps.env.outputs.image_pull_policy }} \
-            --set commonLabels.environment=${{ steps.env.outputs.environment }} \
-            --set resourceQuota.enabled=${{ steps.env.outputs.resource_quota }} \
             --wait \
             --timeout 120s
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Get actual deployed Helm values (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Get deployed Helm values
+        id: helm-values
+        if: github.event_name == 'pull_request'
+        run: |
+          VALUES_JSON=$(helm get values ${{ env.APP_NAME }} -n ${{ steps.env.outputs.namespace }} --output json)
+          echo "cpu_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.cpu // "N/A"')" >> $GITHUB_OUTPUT
+          echo "memory_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.memory // "N/A"')" >> $GITHUB_OUTPUT
+          echo "replicas=$(echo "$VALUES_JSON" | jq -r '.replicas // "1"')" >> $GITHUB_OUTPUT
 
       # ─────────────────────────────────────────────────────────────────────
       # Comment deployed status on PR (preview only)
@@ -162,5 +159,6 @@ jobs:
           namespace: ${{ steps.env.outputs.namespace }}
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           status: deployed
-          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
-          memory-limit: ${{ steps.env.outputs.memory_limit }}
+          cpu-limit: ${{ steps.helm-values.outputs.cpu_limit }}
+          memory-limit: ${{ steps.helm-values.outputs.memory_limit }}
+          replicas: ${{ steps.helm-values.outputs.replicas }}

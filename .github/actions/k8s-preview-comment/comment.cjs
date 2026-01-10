@@ -5,11 +5,19 @@ module.exports = async ({ github, context, core }) => {
 	const status = process.env.STATUS || "deployed";
 	const cpuLimit = process.env.CPU_LIMIT;
 	const memoryLimit = process.env.MEMORY_LIMIT;
+	const replicas = process.env.REPLICAS;
 
 	let body;
-	const resourcesLine = cpuLimit && memoryLimit
-		? `- **Resources:** ${memoryLimit} memory, ${cpuLimit} CPU (limited)`
-		: "";
+
+	// Build resource details section (only shown for deployed status with actual values)
+	let resourceDetails = "";
+	if (status === "deployed") {
+		const lines = [];
+		if (replicas) lines.push(`- **Replicas:** ${replicas}`);
+		if (memoryLimit) lines.push(`- **Memory Limit:** ${memoryLimit}`);
+		if (cpuLimit) lines.push(`- **CPU Limit:** ${cpuLimit}`);
+		resourceDetails = lines.join("\n");
+	}
 
 	if (status === "deploying") {
 		body = `## ⏳ Preview Environment Deploying...
@@ -25,7 +33,6 @@ This comment will be updated when the deployment completes.
 
 - **Namespace:** ${namespace}
 - **Image:** ${image}
-${resourcesLine}
 
 </details>`;
 	} else {
@@ -42,7 +49,7 @@ This environment will be automatically deleted when the PR is closed.
 
 - **Namespace:** ${namespace}
 - **Image:** ${image}
-${resourcesLine}
+${resourceDetails}
 
 </details>`;
 	}
