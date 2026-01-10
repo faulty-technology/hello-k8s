@@ -37,7 +37,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix=sha-,format=long
+            type=sha,prefix=${{ github.event_name == 'pull_request' && format('pr-{0}-sha-', github.event.pull_request.number) || 'sha-' }},format=long
             type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
           labels: |
