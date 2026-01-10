@@ -41,6 +41,7 @@ jobs:
             echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
             echo "replicas=1" >> $GITHUB_OUTPUT
             echo "cpu_limit=250m" >> $GITHUB_OUTPUT
+            echo "memory_limit=256Mi" >> $GITHUB_OUTPUT
             echo "resource_quota=true" >> $GITHUB_OUTPUT
             echo "image_pull_policy=Always" >> $GITHUB_OUTPUT
           else
@@ -50,6 +51,7 @@ jobs:
             echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
             echo "replicas=2" >> $GITHUB_OUTPUT
             echo "cpu_limit=500m" >> $GITHUB_OUTPUT
+            echo "memory_limit=512Mi" >> $GITHUB_OUTPUT
             echo "resource_quota=false" >> $GITHUB_OUTPUT
             echo "image_pull_policy=IfNotPresent" >> $GITHUB_OUTPUT
           fi
@@ -85,6 +87,20 @@ jobs:
           k3s-token: ${{ secrets.K3S_TOKEN }}
 
       # ─────────────────────────────────────────────────────────────────────
+      # Comment deploying status on PR (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Comment deploying status
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/k8s-preview-comment
+        with:
+          preview-url: https://${{ steps.env.outputs.host }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          status: deploying
+          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
+          memory-limit: ${{ steps.env.outputs.memory_limit }}
+
+      # ─────────────────────────────────────────────────────────────────────
       # Deploy with Helm
       # ─────────────────────────────────────────────────────────────────────
       - name: Deploy with Helm
@@ -96,6 +112,7 @@ jobs:
             --set ingress.host=${{ steps.env.outputs.host }} \
             --set containers[0].tag=${{ steps.env.outputs.tag }} \
             --set containers[0].resources.limits.cpu=${{ steps.env.outputs.cpu_limit }} \
+            --set containers[0].resources.limits.memory=${{ steps.env.outputs.memory_limit }} \
             --set containers[0].imagePullPolicy=${{ steps.env.outputs.image_pull_policy }} \
             --set commonLabels.environment=${{ steps.env.outputs.environment }} \
             --set resourceQuota.enabled=${{ steps.env.outputs.resource_quota }} \
@@ -103,12 +120,15 @@ jobs:
             --timeout 120s
 
       # ─────────────────────────────────────────────────────────────────────
-      # Comment on PR (preview only)
+      # Comment deployed status on PR (preview only)
       # ─────────────────────────────────────────────────────────────────────
-      - name: Comment on PR
+      - name: Comment deployed status
         if: github.event_name == 'pull_request'
         uses: ./.github/actions/k8s-preview-comment
         with:
           preview-url: https://${{ steps.env.outputs.host }}
           namespace: ${{ steps.env.outputs.namespace }}
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          status: deployed
+          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
+          memory-limit: ${{ steps.env.outputs.memory_limit }}
