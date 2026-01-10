@@ -23,6 +23,10 @@ inputs:
     description: "Memory limit for the container"
     required: false
     default: ""
+  replicas:
+    description: "Number of replicas deployed"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -36,6 +40,7 @@ runs:
         STATUS: ${{ inputs.status }}
         CPU_LIMIT: ${{ inputs.cpu-limit }}
         MEMORY_LIMIT: ${{ inputs.memory-limit }}
+        REPLICAS: ${{ inputs.replicas }}
       with:
         script: |
           const script = require('./.github/actions/k8s-preview-comment/comment.cjs')

@@ -1,7 +1,0 @@
-# Namespace name is patched dynamically by k8s-deploy action to {app-name}-pr-{number}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: preview
-  labels:
-    environment: preview

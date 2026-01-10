@@ -1,0 +1,21 @@
+# =============================================================================
+# hello-k8s - Production Environment Overrides
+# =============================================================================
+# These values override values-hello-k8s.yaml for production deployments.
+# Layered as: values.yaml -> values-hello-k8s.yaml -> values-production.yaml
+# =============================================================================
+
+replicas: 2
+
+containerDefaults:
+  imagePullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+resourceQuota:
+  enabled: false
+
+commonLabels:
+  environment: production
