@@ -23,6 +23,8 @@ containers:
     image: ghcr.io/org/app
     tag: latest
     port: 3000
+    expose: true              # Expose this container via the Service (required for external access)
+    servicePort: 80           # Port exposed by Service (defaults to container port if not specified)
     healthPath: /health
     # imagePullPolicy: IfNotPresent  # Use "Always" for preview envs with reused tags
     resources:
@@ -41,6 +43,12 @@ containers:
     #       secretKeyRef:
     #         name: db-secret
     #         key: url
+    #
+    # Exposure options:
+    #   expose: true   - Container port is accessible via Service (http://service-name:servicePort)
+    #   expose: false  - Container only accessible within pod via localhost (default)
+    #   servicePort    - Optional: expose container on a different port (e.g., container:3000 as service:80)
+    #   ingressPath    - Optional: path for Ingress routing (first exposed container defaults to "/")
 
 # Optional: Resource quota for the namespace (useful for preview environments)
 resourceQuota:
