@@ -46,7 +46,7 @@ jobs:
             echo "image_pull_policy=Always" >> $GITHUB_OUTPUT
           else
             echo "environment=production" >> $GITHUB_OUTPUT
-            echo "namespace=production" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.APP_NAME }}-prod" >> $GITHUB_OUTPUT
             echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
             echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
             echo "replicas=2" >> $GITHUB_OUTPUT
@@ -106,8 +106,9 @@ jobs:
       - name: Deploy with Helm
         run: |
           helm upgrade --install ${{ env.APP_NAME }} ./helm \
+            --namespace ${{ steps.env.outputs.namespace }} \
+            --create-namespace \
             -f helm/values-hello-k8s.yaml \
-            --set namespace=${{ steps.env.outputs.namespace }} \
             --set replicas=${{ steps.env.outputs.replicas }} \
             --set ingress.host=${{ steps.env.outputs.host }} \
             --set containers[0].tag=${{ steps.env.outputs.tag }} \

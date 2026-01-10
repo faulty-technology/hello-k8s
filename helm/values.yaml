@@ -8,9 +8,6 @@
 # Application name (used for resource names, labels, selectors)
 name: my-app
 
-# Namespace to deploy into
-namespace: default
-
 # Number of replicas
 replicas: 1
 
