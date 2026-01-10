@@ -2,8 +2,34 @@ module.exports = async ({ github, context, core }) => {
 	const previewUrl = process.env.PREVIEW_URL;
 	const namespace = process.env.NAMESPACE;
 	const image = process.env.IMAGE;
+	const status = process.env.STATUS || "deployed";
+	const cpuLimit = process.env.CPU_LIMIT;
+	const memoryLimit = process.env.MEMORY_LIMIT;
 
-	const body = `## 🚀 Preview Environment Ready!
+	let body;
+	const resourcesLine = cpuLimit && memoryLimit
+		? `- **Resources:** ${memoryLimit} memory, ${cpuLimit} CPU (limited)`
+		: "";
+
+	if (status === "deploying") {
+		body = `## ⏳ Preview Environment Deploying...
+
+Deploying preview to:
+**${previewUrl}**
+
+This comment will be updated when the deployment completes.
+
+---
+<details>
+<summary>Preview Environment Details</summary>
+
+- **Namespace:** ${namespace}
+- **Image:** ${image}
+${resourcesLine}
+
+</details>`;
+	} else {
+		body = `## 🚀 Preview Environment Ready!
 
 Your preview is deployed and available at:
 **${previewUrl}**
@@ -16,9 +42,10 @@ This environment will be automatically deleted when the PR is closed.
 
 - **Namespace:** ${namespace}
 - **Image:** ${image}
-- **Resources:** 256Mi memory, 250m CPU (limited)
+${resourcesLine}
 
 </details>`;
+	}
 
 	// Find existing comment
 	const { data: comments } = await github.rest.issues.listComments({

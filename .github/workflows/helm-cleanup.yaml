@@ -1,0 +1,69 @@
+name: Cleanup Preview (Helm)
+
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  APP_NAME: hello-k8s
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup K8s access
+        uses: ./.github/actions/k8s-setup
+        with:
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
+          k3s-token: ${{ secrets.K3S_TOKEN }}
+
+      - name: Uninstall Helm release
+        run: |
+          NAMESPACE="${{ env.APP_NAME }}-pr-${{ github.event.pull_request.number }}"
+
+          # Uninstall the Helm release (also deletes all resources)
+          helm uninstall ${{ env.APP_NAME }} --namespace $NAMESPACE || true
+
+          # Delete the namespace
+          kubectl delete namespace $NAMESPACE --ignore-not-found
+
+      - name: Delete PR container image
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prTag = `pr-${{ github.event.pull_request.number }}`;
+            const packageName = context.repo.repo;
+
+            try {
+              const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                package_type: 'container',
+                package_name: packageName,
+                username: context.repo.owner,
+              });
+
+              const prVersion = versions.data.find(v =>
+                v.metadata?.container?.tags?.includes(prTag)
+              );
+
+              if (prVersion) {
+                await github.rest.packages.deletePackageVersionForUser({
+                  package_type: 'container',
+                  package_name: packageName,
+                  username: context.repo.owner,
+                  package_version_id: prVersion.id,
+                });
+                console.log(`Deleted container image with tag: ${prTag}`);
+              } else {
+                console.log(`No container image found with tag: ${prTag}`);
+              }
+            } catch (error) {
+              console.log(`Failed to delete container image: ${error.message}`);
+            }

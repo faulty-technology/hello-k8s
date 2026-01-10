@@ -1,0 +1,29 @@
+# =============================================================================
+# hello-k8s - Project-specific values
+# =============================================================================
+# This is ALL you need per project. Everything else comes from the generic
+# chart defaults or is set by CI/CD at deploy time.
+# =============================================================================
+
+name: hello-k8s
+
+containers:
+  - name: app
+    image: ghcr.io/faulty-technology/hello-k8s
+    tag: latest  # overridden by CI: --set containers[0].tag=$SHA
+    port: 3000
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+# Everything below is set by CI/CD via --set flags:
+# - namespace
+# - replicas
+# - ingress.host
+# - containers[0].tag
+# - commonLabels.environment

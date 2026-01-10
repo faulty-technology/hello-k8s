@@ -1,0 +1,134 @@
+name: Build and Deploy (Helm)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/**"
+      - "k8s/**"  # ignore old kustomize files
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  APP_NAME: hello-k8s
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Determine environment (production vs preview)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Set environment variables
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUM=${{ github.event.pull_request.number }}
+            echo "environment=preview" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.APP_NAME }}-pr-${PR_NUM}" >> $GITHUB_OUTPUT
+            echo "host=${{ env.APP_NAME }}-pr-${PR_NUM}-preview.faulty.technology" >> $GITHUB_OUTPUT
+            echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
+            echo "replicas=1" >> $GITHUB_OUTPUT
+            echo "cpu_limit=250m" >> $GITHUB_OUTPUT
+            echo "memory_limit=256Mi" >> $GITHUB_OUTPUT
+            echo "resource_quota=true" >> $GITHUB_OUTPUT
+            echo "image_pull_policy=Always" >> $GITHUB_OUTPUT
+          else
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "namespace=production" >> $GITHUB_OUTPUT
+            echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+            echo "replicas=2" >> $GITHUB_OUTPUT
+            echo "cpu_limit=500m" >> $GITHUB_OUTPUT
+            echo "memory_limit=512Mi" >> $GITHUB_OUTPUT
+            echo "resource_quota=false" >> $GITHUB_OUTPUT
+            echo "image_pull_policy=IfNotPresent" >> $GITHUB_OUTPUT
+          fi
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Build and push Docker image
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+            ${{ github.event_name != 'pull_request' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Setup K8s access
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Setup K8s access
+        uses: ./.github/actions/k8s-setup
+        with:
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
+          k3s-token: ${{ secrets.K3S_TOKEN }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Comment deploying status on PR (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Comment deploying status
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/k8s-preview-comment
+        with:
+          preview-url: https://${{ steps.env.outputs.host }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          status: deploying
+          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
+          memory-limit: ${{ steps.env.outputs.memory_limit }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Deploy with Helm
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.APP_NAME }} ./helm \
+            -f helm/values-hello-k8s.yaml \
+            --set namespace=${{ steps.env.outputs.namespace }} \
+            --set replicas=${{ steps.env.outputs.replicas }} \
+            --set ingress.host=${{ steps.env.outputs.host }} \
+            --set containers[0].tag=${{ steps.env.outputs.tag }} \
+            --set containers[0].resources.limits.cpu=${{ steps.env.outputs.cpu_limit }} \
+            --set containers[0].resources.limits.memory=${{ steps.env.outputs.memory_limit }} \
+            --set containers[0].imagePullPolicy=${{ steps.env.outputs.image_pull_policy }} \
+            --set commonLabels.environment=${{ steps.env.outputs.environment }} \
+            --set resourceQuota.enabled=${{ steps.env.outputs.resource_quota }} \
+            --wait \
+            --timeout 120s
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Comment deployed status on PR (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Comment deployed status
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/k8s-preview-comment
+        with:
+          preview-url: https://${{ steps.env.outputs.host }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          status: deployed
+          cpu-limit: ${{ steps.env.outputs.cpu_limit }}
+          memory-limit: ${{ steps.env.outputs.memory_limit }}

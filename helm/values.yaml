@@ -1,0 +1,62 @@
+# =============================================================================
+# Generic App Helm Chart - Default Values
+# =============================================================================
+# This is the interface for the chart. Override these values per-project
+# or via --set flags in your CI/CD pipeline.
+# =============================================================================
+
+# Application name (used for resource names, labels, selectors)
+name: my-app
+
+# Namespace to deploy into
+namespace: default
+
+# Number of replicas
+replicas: 1
+
+# Ingress configuration
+ingress:
+  enabled: true
+  host: app.example.com
+  # className: traefik  # uncomment if needed
+
+# Container definitions - supports multiple containers
+containers:
+  - name: app
+    image: ghcr.io/org/app
+    tag: latest
+    port: 3000
+    healthPath: /health
+    # imagePullPolicy: IfNotPresent  # Use "Always" for preview envs with reused tags
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    env: []
+    # env:
+    #   - name: LOG_LEVEL
+    #     value: info
+    #   - name: DATABASE_URL
+    #     valueFrom:
+    #       secretKeyRef:
+    #         name: db-secret
+    #         key: url
+
+# Optional: Resource quota for the namespace (useful for preview environments)
+resourceQuota:
+  enabled: false
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+  pods: 10
+
+# Labels applied to all resources
+commonLabels: {}
+  # environment: production
+  # team: platform
