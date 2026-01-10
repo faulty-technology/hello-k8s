@@ -42,6 +42,7 @@ jobs:
             echo "replicas=1" >> $GITHUB_OUTPUT
             echo "cpu_limit=250m" >> $GITHUB_OUTPUT
             echo "resource_quota=true" >> $GITHUB_OUTPUT
+            echo "image_pull_policy=Always" >> $GITHUB_OUTPUT
           else
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "namespace=production" >> $GITHUB_OUTPUT
@@ -50,6 +51,7 @@ jobs:
             echo "replicas=2" >> $GITHUB_OUTPUT
             echo "cpu_limit=500m" >> $GITHUB_OUTPUT
             echo "resource_quota=false" >> $GITHUB_OUTPUT
+            echo "image_pull_policy=IfNotPresent" >> $GITHUB_OUTPUT
           fi
 
       # ─────────────────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ jobs:
             --set ingress.host=${{ steps.env.outputs.host }} \
             --set containers[0].tag=${{ steps.env.outputs.tag }} \
             --set containers[0].resources.limits.cpu=${{ steps.env.outputs.cpu_limit }} \
+            --set containers[0].imagePullPolicy=${{ steps.env.outputs.image_pull_policy }} \
             --set commonLabels.environment=${{ steps.env.outputs.environment }} \
             --set resourceQuota.enabled=${{ steps.env.outputs.resource_quota }} \
             --wait \

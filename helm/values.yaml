@@ -27,6 +27,7 @@ containers:
     tag: latest
     port: 3000
     healthPath: /health
+    # imagePullPolicy: IfNotPresent  # Use "Always" for preview envs with reused tags
     resources:
       requests:
         cpu: 100m
