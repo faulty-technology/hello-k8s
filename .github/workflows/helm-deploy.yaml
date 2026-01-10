@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - ".github/**"
-      - "k8s/**"  # ignore old kustomize files
+      - "k8s/**" # ignore old kustomize files
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -14,6 +14,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   APP_NAME: hello-k8s
+  CHART_REGISTRY: ghcr.io/faulty-technology/charts
+  CHART_NAME: generic-app
+  CHART_VERSION: 0.1.0
 
 jobs:
   build-and-deploy:
@@ -22,7 +25,7 @@ jobs:
       contents: read
       packages: write
       pull-requests: write
-      id-token: write  # Required for Cosign keyless signing
+      id-token: write # Required for Cosign keyless signing
 
     steps:
       - name: Checkout repository
@@ -125,7 +128,13 @@ jobs:
       # ─────────────────────────────────────────────────────────────────────
       - name: Deploy with Helm
         run: |
-          helm upgrade --install ${{ env.APP_NAME }} ./helm \
+          # Login to pull chart from OCI registry
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+          helm upgrade --install ${{ env.APP_NAME }} \
+            oci://${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }} \
+            --version ${{ env.CHART_VERSION }} \
             --namespace ${{ steps.env.outputs.namespace }} \
             --create-namespace \
             -f helm/values-hello-k8s.yaml \
