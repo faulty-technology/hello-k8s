@@ -22,10 +22,27 @@ jobs:
       contents: read
       packages: write
       pull-requests: write
+      id-token: write  # Required for Cosign keyless signing
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Extract metadata for Docker (OCI labels + tags)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=long
+            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=${{ env.APP_NAME }}
+            org.opencontainers.image.description=Hello K8s demo application
 
       # ─────────────────────────────────────────────────────────────────────
       # Determine environment (production vs preview)
@@ -48,7 +65,7 @@ jobs:
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "namespace=${{ env.APP_NAME }}-prod" >> $GITHUB_OUTPUT
             echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
-            echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+            echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
             echo "replicas=2" >> $GITHUB_OUTPUT
             echo "cpu_limit=500m" >> $GITHUB_OUTPUT
             echo "memory_limit=512Mi" >> $GITHUB_OUTPUT
@@ -67,13 +84,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
-            ${{ github.event_name != 'pull_request' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Sign container image with Cosign (production only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
       # ─────────────────────────────────────────────────────────────────────
       # Setup K8s access
@@ -95,7 +125,7 @@ jobs:
         with:
           preview-url: https://${{ steps.env.outputs.host }}
           namespace: ${{ steps.env.outputs.namespace }}
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           status: deploying
           cpu-limit: ${{ steps.env.outputs.cpu_limit }}
           memory-limit: ${{ steps.env.outputs.memory_limit }}
@@ -112,6 +142,7 @@ jobs:
             --set replicas=${{ steps.env.outputs.replicas }} \
             --set ingress.host=${{ steps.env.outputs.host }} \
             --set containers[0].tag=${{ steps.env.outputs.tag }} \
+            --set containers[0].digest=${{ steps.build.outputs.digest }} \
             --set containers[0].resources.limits.cpu=${{ steps.env.outputs.cpu_limit }} \
             --set containers[0].resources.limits.memory=${{ steps.env.outputs.memory_limit }} \
             --set containers[0].imagePullPolicy=${{ steps.env.outputs.image_pull_policy }} \
@@ -129,7 +160,7 @@ jobs:
         with:
           preview-url: https://${{ steps.env.outputs.host }}
           namespace: ${{ steps.env.outputs.namespace }}
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           status: deployed
           cpu-limit: ${{ steps.env.outputs.cpu_limit }}
           memory-limit: ${{ steps.env.outputs.memory_limit }}

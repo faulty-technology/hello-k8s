@@ -18,7 +18,11 @@ spec:
       containers:
         {{- range .Values.containers }}
         - name: {{ .name }}
+          {{- if .digest }}
+          image: "{{ .image }}@{{ .digest }}"
+          {{- else }}
           image: "{{ .image }}:{{ .tag }}"
+          {{- end }}
           imagePullPolicy: {{ .imagePullPolicy | default "IfNotPresent" }}
           {{- if .port }}
           ports:
