@@ -17,5 +17,7 @@ containers:
     image: ghcr.io/faulty-technology/hello-k8s
     tag: latest  # overridden by CI: --set containers[0].tag=$SHA
     port: 3000
+    expose: true
+    servicePort: 80
     healthPath: /health
     # resources are inherited from containerDefaults (set per-environment)
