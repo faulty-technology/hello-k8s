@@ -1,0 +1,164 @@
+name: Build and Deploy (Helm)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/**"
+      - "k8s/**"  # ignore old kustomize files
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  APP_NAME: hello-k8s
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+      id-token: write  # Required for Cosign keyless signing
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Extract metadata for Docker (OCI labels + tags)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=long
+            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=${{ env.APP_NAME }}
+            org.opencontainers.image.description=Hello K8s demo application
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Determine environment (production vs preview)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Set environment variables
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUM=${{ github.event.pull_request.number }}
+            echo "environment=preview" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.APP_NAME }}-pr-${PR_NUM}" >> $GITHUB_OUTPUT
+            echo "host=${{ env.APP_NAME }}-pr-${PR_NUM}-preview.faulty.technology" >> $GITHUB_OUTPUT
+            echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
+            echo "values_file=helm/values-preview.yaml" >> $GITHUB_OUTPUT
+          else
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.APP_NAME }}-prod" >> $GITHUB_OUTPUT
+            echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
+            echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+            echo "values_file=helm/values-production.yaml" >> $GITHUB_OUTPUT
+          fi
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Build and push Docker image
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Sign container image with Cosign (production only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Setup K8s access
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Setup K8s access
+        uses: ./.github/actions/k8s-setup
+        with:
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
+          k3s-token: ${{ secrets.K3S_TOKEN }}
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Comment deploying status on PR (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Comment deploying status
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/k8s-preview-comment
+        with:
+          preview-url: https://${{ steps.env.outputs.host }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          status: deploying
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Deploy with Helm
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.APP_NAME }} ./helm \
+            --namespace ${{ steps.env.outputs.namespace }} \
+            --create-namespace \
+            -f helm/values-hello-k8s.yaml \
+            -f ${{ steps.env.outputs.values_file }} \
+            --set ingress.host=${{ steps.env.outputs.host }} \
+            --set containers[0].tag=${{ steps.env.outputs.tag }} \
+            --set containers[0].digest=${{ steps.build.outputs.digest }} \
+            --wait \
+            --timeout 120s
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Get actual deployed Helm values (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Get deployed Helm values
+        id: helm-values
+        if: github.event_name == 'pull_request'
+        run: |
+          VALUES_JSON=$(helm get values ${{ env.APP_NAME }} -n ${{ steps.env.outputs.namespace }} --output json)
+          echo "cpu_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.cpu // "N/A"')" >> $GITHUB_OUTPUT
+          echo "memory_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.memory // "N/A"')" >> $GITHUB_OUTPUT
+          echo "replicas=$(echo "$VALUES_JSON" | jq -r '.replicas // "1"')" >> $GITHUB_OUTPUT
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Comment deployed status on PR (preview only)
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Comment deployed status
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/k8s-preview-comment
+        with:
+          preview-url: https://${{ steps.env.outputs.host }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          status: deployed
+          cpu-limit: ${{ steps.helm-values.outputs.cpu_limit }}
+          memory-limit: ${{ steps.helm-values.outputs.memory_limit }}
+          replicas: ${{ steps.helm-values.outputs.replicas }}

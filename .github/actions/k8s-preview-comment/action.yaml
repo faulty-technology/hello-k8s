@@ -11,6 +11,22 @@ inputs:
   image:
     description: "The Docker image deployed"
     required: true
+  status:
+    description: "Deployment status: deploying or deployed"
+    required: false
+    default: "deployed"
+  cpu-limit:
+    description: "CPU limit for the container"
+    required: false
+    default: ""
+  memory-limit:
+    description: "Memory limit for the container"
+    required: false
+    default: ""
+  replicas:
+    description: "Number of replicas deployed"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -21,7 +37,11 @@ runs:
         PREVIEW_URL: ${{ inputs.preview-url }}
         NAMESPACE: ${{ inputs.namespace }}
         IMAGE: ${{ inputs.image }}
+        STATUS: ${{ inputs.status }}
+        CPU_LIMIT: ${{ inputs.cpu-limit }}
+        MEMORY_LIMIT: ${{ inputs.memory-limit }}
+        REPLICAS: ${{ inputs.replicas }}
       with:
         script: |
-          const script = require('./.github/actions/k8s-preview-comment/comment.js')
+          const script = require('./.github/actions/k8s-preview-comment/comment.cjs')
           await script({ github, context, core })

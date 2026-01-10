@@ -1,0 +1,23 @@
+# =============================================================================
+# hello-k8s - Project-specific base values
+# =============================================================================
+# Base configuration for the hello-k8s project.
+#
+# Values layering order:
+#   1. helm/values.yaml (chart defaults)
+#   2. helm/values-hello-k8s.yaml (this file - project base)
+#   3. helm/values-{environment}.yaml (environment overrides)
+#   4. --set flags (dynamic values: tag, digest, host)
+# =============================================================================
+
+name: hello-k8s
+
+containers:
+  - name: app
+    image: ghcr.io/faulty-technology/hello-k8s
+    tag: latest  # overridden by CI: --set containers[0].tag=$SHA
+    port: 3000
+    expose: true
+    servicePort: 80
+    healthPath: /health
+    # resources are inherited from containerDefaults (set per-environment)

@@ -1,0 +1,84 @@
+# =============================================================================
+# Generic App Helm Chart - Default Values
+# =============================================================================
+# This is the interface for the chart. Override these values per-project
+# or via --set flags in your CI/CD pipeline.
+# =============================================================================
+
+# Application name (used for resource names, labels, selectors)
+name: my-app
+
+# Number of replicas
+replicas: 1
+
+# Ingress configuration
+ingress:
+  enabled: true
+  host: app.example.com
+  # className: traefik  # uncomment if needed
+
+# Container definitions - supports multiple containers
+containers:
+  - name: app
+    image: ghcr.io/org/app
+    tag: latest
+    port: 3000
+    expose: true              # Expose this container via the Service (required for external access)
+    servicePort: 80           # Port exposed by Service (defaults to container port if not specified)
+    healthPath: /health
+    # imagePullPolicy: IfNotPresent  # Use "Always" for preview envs with reused tags
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    env: []
+    # env:
+    #   - name: LOG_LEVEL
+    #     value: info
+    #   - name: DATABASE_URL
+    #     valueFrom:
+    #       secretKeyRef:
+    #         name: db-secret
+    #         key: url
+    #
+    # Exposure options:
+    #   expose: true   - Container port is accessible via Service (http://service-name:servicePort)
+    #   expose: false  - Container only accessible within pod via localhost (default)
+    #   servicePort    - Optional: expose container on a different port (e.g., container:3000 as service:80)
+    #   ingressPath    - Optional: path for Ingress routing (first exposed container defaults to "/")
+
+# Optional: Resource quota for the namespace (useful for preview environments)
+resourceQuota:
+  enabled: false
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+  pods: 10
+
+# Labels applied to all resources
+commonLabels: {}
+  # environment: production
+  # team: platform
+
+# =============================================================================
+# Container Defaults
+# =============================================================================
+# Default settings applied to all containers unless overridden per-container.
+# Environment-specific values files (values-preview.yaml, values-production.yaml)
+# can override these defaults.
+# =============================================================================
+containerDefaults:
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

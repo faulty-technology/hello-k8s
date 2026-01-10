@@ -1,8 +1,11 @@
-name: Cleanup Preview Environment
+name: Cleanup Preview (Helm)
 
 on:
   pull_request:
     types: [closed]
+
+env:
+  APP_NAME: hello-k8s
 
 jobs:
   cleanup:
@@ -22,11 +25,15 @@ jobs:
           k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
           k3s-token: ${{ secrets.K3S_TOKEN }}
 
-      - name: Cleanup preview environment
-        uses: ./.github/actions/k8s-preview-cleanup
-        with:
-          app-name: hello-k8s
-          pr-number: ${{ github.event.pull_request.number }}
+      - name: Uninstall Helm release
+        run: |
+          NAMESPACE="${{ env.APP_NAME }}-pr-${{ github.event.pull_request.number }}"
+
+          # Uninstall the Helm release (also deletes all resources)
+          helm uninstall ${{ env.APP_NAME }} --namespace $NAMESPACE || true
+
+          # Delete the namespace
+          kubectl delete namespace $NAMESPACE --ignore-not-found
 
       - name: Delete PR container image
         uses: actions/github-script@v7
@@ -36,14 +43,12 @@ jobs:
             const packageName = context.repo.repo;
 
             try {
-              // List all versions of the package
               const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
                 package_type: 'container',
                 package_name: packageName,
                 username: context.repo.owner,
               });
 
-              // Find the version with the PR tag
               const prVersion = versions.data.find(v =>
                 v.metadata?.container?.tags?.includes(prTag)
               );
@@ -60,6 +65,5 @@ jobs:
                 console.log(`No container image found with tag: ${prTag}`);
               }
             } catch (error) {
-              // Log but don't fail the workflow
               console.log(`Failed to delete container image: ${error.message}`);
             }
