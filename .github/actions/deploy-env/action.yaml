@@ -1,0 +1,65 @@
+name: "Deploy Environment"
+description: "Determine deployment environment settings based on GitHub context"
+
+inputs:
+  app-name:
+    description: "Application name"
+    required: true
+  domain:
+    description: "Base domain for preview URLs"
+    required: true
+  production-host:
+    description: "Production hostname"
+    required: true
+  preview-values-file:
+    description: "Path to preview Helm values file"
+    required: false
+    default: "helm/values-preview.yaml"
+  production-values-file:
+    description: "Path to production Helm values file"
+    required: false
+    default: "helm/values-production.yaml"
+
+outputs:
+  environment:
+    description: "Environment name (preview or production)"
+    value: ${{ steps.detect.outputs.environment }}
+  namespace:
+    description: "Target Kubernetes namespace"
+    value: ${{ steps.detect.outputs.namespace }}
+  host:
+    description: "Ingress hostname"
+    value: ${{ steps.detect.outputs.host }}
+  tag:
+    description: "Image tag"
+    value: ${{ steps.detect.outputs.tag }}
+  values_file:
+    description: "Path to Helm values file"
+    value: ${{ steps.detect.outputs.values_file }}
+  is_preview:
+    description: "Whether this is a preview deployment"
+    value: ${{ steps.detect.outputs.is_preview }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect environment
+      id: detect
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "environment=preview" >> $GITHUB_OUTPUT
+          echo "namespace=${{ inputs.app-name }}-pr-${PR_NUM}" >> $GITHUB_OUTPUT
+          echo "host=${{ inputs.app-name }}-pr-${PR_NUM}-preview.${{ inputs.domain }}" >> $GITHUB_OUTPUT
+          echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
+          echo "values_file=${{ inputs.preview-values-file }}" >> $GITHUB_OUTPUT
+          echo "is_preview=true" >> $GITHUB_OUTPUT
+        else
+          echo "environment=production" >> $GITHUB_OUTPUT
+          echo "namespace=${{ inputs.app-name }}-prod" >> $GITHUB_OUTPUT
+          echo "host=${{ inputs.production-host }}" >> $GITHUB_OUTPUT
+          echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "values_file=${{ inputs.production-values-file }}" >> $GITHUB_OUTPUT
+          echo "is_preview=false" >> $GITHUB_OUTPUT
+        fi

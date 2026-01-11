@@ -49,23 +49,13 @@ jobs:
       # ─────────────────────────────────────────────────────────────────────
       # Determine environment (production vs preview)
       # ─────────────────────────────────────────────────────────────────────
-      - name: Set environment variables
+      - name: Detect deploy environment
         id: env
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            PR_NUM=${{ github.event.pull_request.number }}
-            echo "environment=preview" >> $GITHUB_OUTPUT
-            echo "namespace=${{ env.APP_NAME }}-pr-${PR_NUM}" >> $GITHUB_OUTPUT
-            echo "host=${{ env.APP_NAME }}-pr-${PR_NUM}-preview.faulty.technology" >> $GITHUB_OUTPUT
-            echo "tag=pr-${PR_NUM}" >> $GITHUB_OUTPUT
-            echo "values_file=helm/values-preview.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "environment=production" >> $GITHUB_OUTPUT
-            echo "namespace=${{ env.APP_NAME }}-prod" >> $GITHUB_OUTPUT
-            echo "host=hello.faulty.technology" >> $GITHUB_OUTPUT
-            echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
-            echo "values_file=helm/values-production.yaml" >> $GITHUB_OUTPUT
-          fi
+        uses: ./.github/actions/deploy-env
+        with:
+          app-name: ${{ env.APP_NAME }}
+          domain: faulty.technology
+          production-host: hello.faulty.technology
 
       # ─────────────────────────────────────────────────────────────────────
       # Setup K8s access
