@@ -16,7 +16,7 @@ env:
   APP_NAME: hello-k8s
   CHART_REGISTRY: ghcr.io/faulty-technology/charts
   CHART_NAME: generic-app
-  CHART_VERSION: 0.1.0
+  CHART_VERSION: 0.2.0
 
 jobs:
   build-and-deploy:
