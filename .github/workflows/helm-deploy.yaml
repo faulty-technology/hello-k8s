@@ -127,23 +127,22 @@ jobs:
       # Deploy with Helm
       # ─────────────────────────────────────────────────────────────────────
       - name: Deploy with Helm
-        run: |
-          # Login to pull chart from OCI registry
-          echo "${{ secrets.GITHUB_TOKEN }}" | \
-            helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-
-          helm upgrade --install ${{ env.APP_NAME }} \
-            oci://${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }} \
-            --version ${{ env.CHART_VERSION }} \
-            --namespace ${{ steps.env.outputs.namespace }} \
-            --create-namespace \
-            -f helm/values-hello-k8s.yaml \
-            -f ${{ steps.env.outputs.values_file }} \
-            --set ingress.host=${{ steps.env.outputs.host }} \
-            --set containers[0].tag=${{ steps.env.outputs.tag }} \
-            --set containers[0].digest=${{ steps.build.outputs.digest }} \
-            --wait \
-            --timeout 120s
+        uses: ./.github/actions/helm-deploy
+        with:
+          release-name: ${{ env.APP_NAME }}
+          namespace: ${{ steps.env.outputs.namespace }}
+          chart: oci://${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }}
+          chart-version: ${{ env.CHART_VERSION }}
+          values-files: |
+            helm/values-hello-k8s.yaml
+            ${{ steps.env.outputs.values_file }}
+          set-values: |
+            ingress.host=${{ steps.env.outputs.host }}
+            containers[0].tag=${{ steps.env.outputs.tag }}
+            containers[0].digest=${{ steps.build.outputs.digest }}
+          registry: ${{ env.REGISTRY }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       # ─────────────────────────────────────────────────────────────────────
       # Get actual deployed Helm values (preview only)
