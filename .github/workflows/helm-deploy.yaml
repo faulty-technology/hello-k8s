@@ -91,7 +91,7 @@ jobs:
           chart: oci://${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }}
           chart-version: ${{ env.CHART_VERSION }}
           values-files: |
-            helm/values-hello-k8s.yaml
+            helm/values-defaults.yaml
             ${{ steps.env.outputs.values_file }}
           set-values: |
             ingress.host=${{ steps.env.outputs.host }}
