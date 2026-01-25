@@ -35,7 +35,7 @@ inputs:
   timeout:
     description: "Deployment timeout"
     required: false
-    default: "120s"
+    default: "5m"
   create-namespace:
     description: "Create namespace if it doesn't exist"
     required: false
