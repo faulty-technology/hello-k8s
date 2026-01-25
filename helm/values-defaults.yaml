@@ -18,13 +18,13 @@ name: hello-k8s
 
 container:
   image: ghcr.io/faulty-technology/hello-k8s
-  tag: latest                    # overridden by CI: --set container.tag=$SHA
+  tag: latest # overridden by CI: --set container.tag=$SHA
   port: 3000
   expose: true
   servicePort: 80
   healthPath: /health
-  imagePullPolicy: IfNotPresent  # overridden per-environment
-  resources:                     # overridden per-environment
+  imagePullPolicy: IfNotPresent # overridden per-environment
+  resources: # overridden per-environment
     requests:
       cpu: 100m
       memory: 128Mi
@@ -36,7 +36,7 @@ sidecars:
   nginx:
     image: nginx
     tag: latest
-    port: 8080
+    port: 80
     imagePullPolicy: IfNotPresent
     resources:
       requests:
