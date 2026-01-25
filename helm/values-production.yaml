@@ -1,19 +1,38 @@
 # =============================================================================
 # hello-k8s - Production Environment Overrides
 # =============================================================================
-# These values override values-hello-k8s.yaml for production deployments.
-# Layered as: values.yaml -> values-hello-k8s.yaml -> values-production.yaml
+# These values override values-defaults.yaml for production deployments.
+# Only specify fields that differ from the defaults.
+#
+# Layering: chart defaults -> values-defaults.yaml -> values-production.yaml
 # =============================================================================
 
 replicas: 2
 
-containerDefaults:
-  imagePullPolicy: IfNotPresent
+# Primary container overrides for production
+container:
+  imagePullPolicy: IfNotPresent  # Images are immutable (deployed by digest)
   resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
     limits:
       cpu: 500m
       memory: 512Mi
 
+# Sidecar overrides for production
+sidecars:
+  nginx:
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# No quota constraints in production
 resourceQuota:
   enabled: false
 
