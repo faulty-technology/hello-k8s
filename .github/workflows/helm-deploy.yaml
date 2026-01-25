@@ -16,7 +16,7 @@ env:
   APP_NAME: hello-k8s
   CHART_REGISTRY: ghcr.io/faulty-technology/charts
   CHART_NAME: generic-app
-  CHART_VERSION: 0.2.0
+  CHART_VERSION: 0.3.0
 
 jobs:
   build-and-deploy:
@@ -95,8 +95,8 @@ jobs:
             ${{ steps.env.outputs.values_file }}
           set-values: |
             ingress.host=${{ steps.env.outputs.host }}
-            containers[0].tag=${{ steps.env.outputs.tag }}
-            containers[0].digest=${{ steps.build.outputs.digest }}
+            container.tag=${{ steps.env.outputs.tag }}
+            container.digest=${{ steps.build.outputs.digest }}
           registry: ${{ env.REGISTRY }}
           registry-username: ${{ github.actor }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
