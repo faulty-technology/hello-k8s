@@ -12,6 +12,12 @@ replicas: 1
 # Primary container overrides for preview
 container:
   imagePullPolicy: Always        # Always pull to get latest tag in preview
+  env:
+    - name: APP_NAME
+      value: hello-k8s
+    - name: APP_ENV
+      value: preview
+    # PR_NUMBER is set via --set in the workflow when available
   resources:
     requests:
       cpu: 50m

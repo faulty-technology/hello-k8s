@@ -12,6 +12,11 @@ replicas: 2
 # Primary container overrides for production
 container:
   imagePullPolicy: IfNotPresent  # Images are immutable (deployed by digest)
+  env:
+    - name: APP_NAME
+      value: hello-k8s
+    - name: APP_ENV
+      value: production
   resources:
     requests:
       cpu: 100m

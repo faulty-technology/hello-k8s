@@ -81,6 +81,19 @@ jobs:
           status: deploying
 
       # ─────────────────────────────────────────────────────────────────────
+      # Generate workflow-level environment variables for Helm
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Generate workflow env values
+        if: github.event_name == 'pull_request'
+        run: |
+          cat > /tmp/workflow-env.yaml << EOF
+          container:
+            env:
+              - name: PR_NUMBER
+                value: "${{ github.event.pull_request.number }}"
+          EOF
+
+      # ─────────────────────────────────────────────────────────────────────
       # Deploy with Helm
       # ─────────────────────────────────────────────────────────────────────
       - name: Deploy with Helm
@@ -93,6 +106,7 @@ jobs:
           values-files: |
             helm/values-defaults.yaml
             ${{ steps.env.outputs.values_file }}
+            ${{ github.event_name == 'pull_request' && '/tmp/workflow-env.yaml' || '' }}
           set-values: |
             ingress.host=${{ steps.env.outputs.host }}
             container.tag=${{ steps.env.outputs.tag }}

@@ -31,6 +31,9 @@ container:
     limits:
       cpu: 500m
       memory: 256Mi
+  env:
+    - name: APP_NAME
+      value: hello-k8s
 
 sidecars:
   nginx:
