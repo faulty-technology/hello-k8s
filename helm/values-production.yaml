@@ -11,7 +11,7 @@ replicas: 2
 
 # Primary container overrides for production
 container:
-  tag: latest # Pinned by CI — updated on each deploy to sha-<commit>
+  tag: sha-6fd37c0a08145f652aa31a084df348f8e103e590
   imagePullPolicy: IfNotPresent
   env:
     - name: APP_NAME
