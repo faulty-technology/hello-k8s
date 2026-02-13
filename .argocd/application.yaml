@@ -17,7 +17,7 @@ spec:
           - $values/helm/values-production.yaml
         parameters:
           - name: ingress.host
-            value: hello.faulty.technology
+            value: hello-k8s.faulty.technology
     - repoURL: https://github.com/faulty-technology/hello-k8s.git
       targetRevision: main
       ref: values
