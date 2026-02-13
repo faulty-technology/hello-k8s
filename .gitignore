@@ -1,4 +1,4 @@
 node_modules
-private
-dist
+/private
+/dist
 /generic-app
