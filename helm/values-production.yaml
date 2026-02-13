@@ -11,7 +11,8 @@ replicas: 2
 
 # Primary container overrides for production
 container:
-  imagePullPolicy: IfNotPresent  # Images are immutable (deployed by digest)
+  tag: latest # Pinned by CI — updated on each deploy to sha-<commit>
+  imagePullPolicy: IfNotPresent
   env:
     - name: APP_NAME
       value: hello-k8s

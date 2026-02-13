@@ -1,40 +1,16 @@
-name: Cleanup Preview (Helm)
+name: Cleanup Preview
 
 on:
   pull_request:
     types: [closed]
 
-env:
-  APP_NAME: hello-k8s
-
 jobs:
-  cleanup:
+  cleanup-images:
     runs-on: ubuntu-latest
     permissions:
       packages: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup K8s access
-        uses: ./.github/actions/k8s-setup
-        with:
-          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
-          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
-          k3s-token: ${{ secrets.K3S_TOKEN }}
-
-      - name: Uninstall Helm release
-        run: |
-          NAMESPACE="${{ env.APP_NAME }}-pr-${{ github.event.pull_request.number }}"
-
-          # Uninstall the Helm release (also deletes all resources)
-          helm uninstall ${{ env.APP_NAME }} --namespace $NAMESPACE || true
-
-          # Delete the namespace
-          kubectl delete namespace $NAMESPACE --ignore-not-found
-
       - name: Delete PR container images
         uses: actions/github-script@v7
         with:
@@ -49,7 +25,6 @@ jobs:
                 username: context.repo.owner,
               });
 
-              // Find all versions with any tag starting with pr-<N>
               const prVersions = versions.data.filter(v =>
                 v.metadata?.container?.tags?.some(tag => tag.startsWith(prPrefix))
               );

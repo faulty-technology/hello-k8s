@@ -1,11 +1,12 @@
-name: Build and Deploy (Helm)
+name: Build and Deploy
 
 on:
   push:
     branches: [main]
     paths-ignore:
       - ".github/**"
-      - "k8s/**" # ignore old kustomize files
+      - ".argocd/**"
+      - "helm/values-production.yaml"
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -14,18 +15,15 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   APP_NAME: hello-k8s
-  CHART_REGISTRY: ghcr.io/faulty-technology/charts
-  CHART_NAME: generic-app
-  CHART_VERSION: 0.3.0
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # Push tag commit to main
       packages: write
       pull-requests: write
-      id-token: write # Required for Cosign keyless signing
+      id-token: write # Cosign keyless signing
 
     steps:
       - name: Checkout repository
@@ -47,97 +45,72 @@ jobs:
           sign: ${{ github.event_name != 'pull_request' }}
 
       # ─────────────────────────────────────────────────────────────────────
-      # Determine environment (production vs preview)
+      # Production: commit image tag for ArgoCD to pick up
       # ─────────────────────────────────────────────────────────────────────
-      - name: Detect deploy environment
-        id: env
-        uses: ./.github/actions/deploy-env
-        with:
-          app-name: ${{ env.APP_NAME }}
-          domain: faulty.technology
-          production-host: hello.faulty.technology
-
-      # ─────────────────────────────────────────────────────────────────────
-      # Setup K8s access
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Setup K8s access
-        uses: ./.github/actions/k8s-setup
-        with:
-          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          tailscale-oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
-          k3s-ca-cert: ${{ secrets.K3S_CA_CERT }}
-          k3s-token: ${{ secrets.K3S_TOKEN }}
-
-      # ─────────────────────────────────────────────────────────────────────
-      # Comment deploying status on PR (preview only)
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Comment deploying status
-        if: github.event_name == 'pull_request'
-        uses: ./.github/actions/k8s-preview-comment
-        with:
-          preview-url: https://${{ steps.env.outputs.host }}
-          namespace: ${{ steps.env.outputs.namespace }}
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          status: deploying
-
-      # ─────────────────────────────────────────────────────────────────────
-      # Generate workflow-level environment variables for Helm
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Generate workflow env values
-        if: github.event_name == 'pull_request'
+      - name: Update production image tag
+        if: github.ref == 'refs/heads/main'
         run: |
-          cat > /tmp/workflow-env.yaml << EOF
-          container:
-            env:
-              - name: PR_NUMBER
-                value: "${{ github.event.pull_request.number }}"
-          EOF
+          TAG="sha-${GITHUB_SHA}"
+          sed -i "s/^  tag: .*/  tag: ${TAG}/" helm/values-production.yaml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/values-production.yaml
+          if ! git diff --staged --quiet; then
+            git commit -m "deploy: ${TAG}"
+            git push
+          fi
 
       # ─────────────────────────────────────────────────────────────────────
-      # Deploy with Helm
+      # Preview: comment with deterministic URL (ArgoCD deploys it)
       # ─────────────────────────────────────────────────────────────────────
-      - name: Deploy with Helm
-        uses: ./.github/actions/helm-deploy
-        with:
-          release-name: ${{ env.APP_NAME }}
-          namespace: ${{ steps.env.outputs.namespace }}
-          chart: oci://${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }}
-          chart-version: ${{ env.CHART_VERSION }}
-          values-files: |
-            helm/values-defaults.yaml
-            ${{ steps.env.outputs.values_file }}
-            ${{ github.event_name == 'pull_request' && '/tmp/workflow-env.yaml' || '' }}
-          set-values: |
-            ingress.host=${{ steps.env.outputs.host }}
-            container.tag=${{ steps.env.outputs.tag }}
-            container.digest=${{ steps.build.outputs.digest }}
-          registry: ${{ env.REGISTRY }}
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      # ─────────────────────────────────────────────────────────────────────
-      # Get actual deployed Helm values (preview only)
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Get deployed Helm values
-        id: helm-values
+      - name: Comment preview URL
         if: github.event_name == 'pull_request'
-        run: |
-          VALUES_JSON=$(helm get values ${{ env.APP_NAME }} -n ${{ steps.env.outputs.namespace }} --output json)
-          echo "cpu_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.cpu // "N/A"')" >> $GITHUB_OUTPUT
-          echo "memory_limit=$(echo "$VALUES_JSON" | jq -r '.containerDefaults.resources.limits.memory // "N/A"')" >> $GITHUB_OUTPUT
-          echo "replicas=$(echo "$VALUES_JSON" | jq -r '.replicas // "1"')" >> $GITHUB_OUTPUT
-
-      # ─────────────────────────────────────────────────────────────────────
-      # Comment deployed status on PR (preview only)
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Comment deployed status
-        if: github.event_name == 'pull_request'
-        uses: ./.github/actions/k8s-preview-comment
+        uses: actions/github-script@v7
         with:
-          preview-url: https://${{ steps.env.outputs.host }}
-          namespace: ${{ steps.env.outputs.namespace }}
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          status: deployed
-          cpu-limit: ${{ steps.helm-values.outputs.cpu_limit }}
-          memory-limit: ${{ steps.helm-values.outputs.memory_limit }}
-          replicas: ${{ steps.helm-values.outputs.replicas }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const previewUrl = `https://hello-k8s-pr-${prNumber}-preview.faulty.technology`;
+            const image = `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}`;
+
+            const body = `## Preview Environment
+
+            Your preview will be available at:
+            **${previewUrl}**
+
+            ArgoCD will deploy it automatically once the image is built.
+
+            ---
+            <details>
+            <summary>Details</summary>
+
+            - **Image:** \`${image}\`
+            - **Namespace:** \`hello-k8s-pr-${prNumber}\`
+
+            </details>`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Preview Environment')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }

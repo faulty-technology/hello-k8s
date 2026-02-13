@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: hello-k8s-previews
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - pullRequest:
+        github:
+          owner: faulty-technology
+          repo: hello-k8s
+          appSecretName: argocd-repo-github-app
+        requeueAfterSeconds: 300
+  template:
+    metadata:
+      name: "hello-k8s-pr-{{.number}}"
+      labels:
+        app.kubernetes.io/part-of: hello-k8s
+        preview-pr: "{{.number}}"
+    spec:
+      project: apps
+      sources:
+        - repoURL: ghcr.io/faulty-technology/charts
+          chart: generic-app
+          targetRevision: "0.3.0"
+          helm:
+            valueFiles:
+              - $values/helm/values-defaults.yaml
+              - $values/helm/values-preview.yaml
+            parameters:
+              - name: container.tag
+                value: "pr-{{.number}}-sha-{{.head_sha}}"
+              - name: ingress.host
+                value: "hello-k8s-pr-{{.number}}-preview.faulty.technology"
+        - repoURL: https://github.com/faulty-technology/hello-k8s.git
+          targetRevision: "{{.branch}}"
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "hello-k8s-pr-{{.number}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
