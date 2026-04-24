@@ -11,7 +11,7 @@ replicas: 2
 
 # Primary container overrides for production
 container:
-  tag: sha-261c9d441d924b3b3b819ae8e2ce4382cd2fe6f3
+  tag: sha-ca0d9fdbd2f0422887ca3c1264fd50a4274609d9
   imagePullPolicy: IfNotPresent
   env:
     - name: APP_NAME
